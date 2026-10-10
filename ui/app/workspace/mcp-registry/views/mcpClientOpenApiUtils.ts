@@ -1,6 +1,7 @@
 import type {
 	MCPOpenAPIConfig,
 	MCPOpenAPICredential,
+	MCPOpenAPIPreviewRequest,
 	MCPOpenAPIPreviewResponse,
 	MCPOpenAPIPreviewTool,
 	MCPOpenAPISecurityScheme,
@@ -167,7 +168,11 @@ export function securitySchemeToInputs(scheme: MCPOpenAPISecurityScheme): OpenAP
 			label: `${scheme.name} · Basic authentication`,
 			fields: [
 				{ field: "username", label: "Username", placeholder: "Username" },
-				{ field: "password", label: "Password", placeholder: `Password or env.${toEnvName(scheme.name)}_PASSWORD` },
+				{
+					field: "password",
+					label: "Password",
+					placeholder: `Password or env.${toEnvName(scheme.name)}_PASSWORD`,
+				},
 			],
 			helper: scheme.description,
 		};
@@ -175,7 +180,13 @@ export function securitySchemeToInputs(scheme: MCPOpenAPISecurityScheme): OpenAP
 	return {
 		scheme,
 		label: `${scheme.name} · Bearer token`,
-		fields: [{ field: "value", label: "Bearer token", placeholder: `Token or env.${toEnvName(scheme.name)}` }],
+		fields: [
+			{
+				field: "value",
+				label: "Bearer token",
+				placeholder: `Token or env.${toEnvName(scheme.name)}`,
+			},
+		],
 		helper: scheme.description,
 	};
 }
@@ -379,13 +390,19 @@ export async function readUploadedSpec(file: {
 	text: () => Promise<string>;
 }): Promise<{ text: string; error: string | null }> {
 	if (isSpecTooLarge(file.size)) {
-		return { text: "", error: `The file exceeds the ${formatBytes(OPENAPI_MAX_SPEC_BYTES)} limit for OpenAPI documents.` };
+		return {
+			text: "",
+			error: `The file exceeds the ${formatBytes(OPENAPI_MAX_SPEC_BYTES)} limit for OpenAPI documents.`,
+		};
 	}
 	let text: string;
 	try {
 		text = await file.text();
 	} catch (error) {
-		return { text: "", error: `The file could not be read: ${error instanceof Error ? error.message : String(error)}` };
+		return {
+			text: "",
+			error: `The file could not be read: ${error instanceof Error ? error.message : String(error)}`,
+		};
 	}
 	return { text, error: text.trim() ? null : "The file is empty." };
 }
@@ -500,4 +517,72 @@ export function openAPIBaseUrlRequired(choice: "server" | "custom", preview: MCP
  */
 export function selectableServers(preview: MCPOpenAPIPreviewResponse | null | undefined): string[] {
 	return (preview?.servers ?? []).filter((srv) => /^https?:\/\/[^/]/i.test(srv));
+}
+
+/**
+ * Whether the edit sheet's spec replacement holds changes worth saving: an open
+ * replacement with a parsed preview, edited credentials, or a source (text, file
+ * or URL) changed from what was loaded, even before it is parsed. It lives
+ * outside the form, so the sheet adds it to the form's own dirty state.
+ */
+export function replacementIsDirty(r: {
+	open: boolean;
+	preview: MCPOpenAPIPreviewResponse | null;
+	credentialsDirty: boolean;
+	sourceEdited?: boolean;
+}): boolean {
+	return r.open && (!!r.preview || r.credentialsDirty || !!r.sourceEdited);
+}
+
+/**
+ * The auto-execute list to save with a replaced document's tool selection: an
+ * entry survives only if its tool is still offered and selected. "*" stays "*"
+ * while every tool is selected, and otherwise becomes the selected tools, since
+ * the server refuses "*" next to a partial tools_to_execute.
+ */
+export function replacementAutoExecute(autoExecute: string[] | undefined, supported: string[], toolsToExecute: string[]): string[] {
+	const all = toolsToExecute.includes("*");
+	if (!all && autoExecute?.includes("*")) return toolsToExecute.filter((name) => supported.includes(name));
+	return (autoExecute ?? []).filter((name) => (name === "*" ? all : supported.includes(name) && (all || toolsToExecute.includes(name))));
+}
+
+/**
+ * The preview request for the edit sheet's replacement source. It carries the
+ * stored include_deprecated and the client's name, so the picker offers the
+ * tools the saved server will build under the names an update accepts.
+ */
+export function replacePreviewRequest(
+	mode: OpenAPISourceMode,
+	specText: string,
+	specUrl: string,
+	customBase: string | undefined,
+	includeDeprecated: boolean | undefined,
+	clientName?: string,
+): MCPOpenAPIPreviewRequest {
+	const req: MCPOpenAPIPreviewRequest =
+		mode === "url" ? { spec_url: specUrl.trim(), base_url: customBase } : { spec: specText, base_url: customBase };
+	if (includeDeprecated) req.include_deprecated = true;
+	if (clientName?.trim()) req.client_name = clientName.trim();
+	return req;
+}
+/**
+ * Whether loading the stored document failed only because the client has none
+ * (a spec_url-only client: the endpoint answers 404). Any other failure is a
+ * real error the edit sheet must show rather than an empty editor.
+ */
+export function isMissingStoredSpec(error: unknown): boolean {
+	return typeof error === "object" && error !== null && (error as { status?: unknown }).status === 404;
+}
+
+/**
+ * The operations a replacement parse reconciles the selection against: the
+ * last parsed replacement, or before the first parse, the preview of the
+ * stored document (so even the first parse matches by method and path, not by
+ * a name another operation may inherit). Undefined when neither exists.
+ */
+export function replacementPreviousTools(
+	latest: MCPOpenAPIPreviewResponse | null | undefined,
+	baseline: MCPOpenAPIPreviewResponse | null | undefined,
+): MCPOpenAPIPreviewTool[] | undefined {
+	return (latest ?? baseline)?.tools;
 }
