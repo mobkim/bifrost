@@ -1838,6 +1838,18 @@ func HandleOpenAIChatCompletionStreaming(
 					if response.Usage.Cost != nil {
 						usage.Cost = response.Usage.Cost
 					}
+					// Self-hosted-engine metrics (see applySelfHostedUsageExtensions): these are
+					// instant readings, not counters, so last-non-nil-wins rather than summing -
+					// same treatment as Speed/InferenceGeo elsewhere in this usage struct.
+					if response.Usage.PrefillTokensPerSecond != nil {
+						usage.PrefillTokensPerSecond = response.Usage.PrefillTokensPerSecond
+					}
+					if response.Usage.DecodeTokensPerSecond != nil {
+						usage.DecodeTokensPerSecond = response.Usage.DecodeTokensPerSecond
+					}
+					if response.Usage.TimeToFirstTokenMs != nil {
+						usage.TimeToFirstTokenMs = response.Usage.TimeToFirstTokenMs
+					}
 					// usageSeen is deliberately not set here: it belongs to the Responses
 					// fallback branch above, which is the only reader (the Mantle exit and the
 					// terminal-event usage attach). This branch gates on trailingUsageSeen.
