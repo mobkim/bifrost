@@ -386,6 +386,13 @@ type Log struct {
 	Latency           *float64 `gorm:"index:idx_logs_latency" json:"latency,omitempty"`
 	UpstreamLatency   *float64 `gorm:"index:idx_logs_upstream_latency" json:"upstream_latency,omitempty"` // Provider socket time across all attempts, ms; nil = unmeasured
 	OverheadLatency   *float64 `gorm:"index:idx_logs_overhead_latency" json:"overhead_latency,omitempty"` // Bifrost overhead (total minus upstream), ms; nil = unmeasured
+	// PrefillTps/DecodeTps/TtftMs carry self-hosted-engine inference metrics (currently
+	// Gufo's usage.prompt_tokens_per_second/usage.completion_tokens_per_second/usage.gufo.ttft_ms,
+	// see core/providers/openai/applySelfHostedUsageExtensions) off schemas.BifrostLLMUsage.
+	// Nil for every other provider; observability only, never billed on.
+	PrefillTps        *float64 `json:"prefill_tps,omitempty"`
+	DecodeTps         *float64 `json:"decode_tps,omitempty"`
+	TtftMs            *float64 `json:"ttft_ms,omitempty"`
 	OverheadBreakdown string   `gorm:"type:text" json:"-"`                                                // JSON serialized []OverheadBucket: per-span self-time decomposition of overhead
 	TokenUsage        string   `gorm:"type:text" json:"-"`                                                // JSON serialized *schemas.LLMUsage
 	// Denormalized cost split for per-category quota aggregation. input + output +

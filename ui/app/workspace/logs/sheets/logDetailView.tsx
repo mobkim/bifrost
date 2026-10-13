@@ -1407,6 +1407,30 @@ export function LogDetailView({
 										log.overhead_latency == null || isNaN(log.overhead_latency) ? "N/A" : <div>{log.overhead_latency.toFixed(2)}ms</div>
 									}
 								/>
+								{log.prefill_tps != null && !isNaN(log.prefill_tps) && (
+									<LogEntryDetailsView
+										className="w-full"
+										label="Prefill Speed"
+										tooltip="Prompt-processing throughput reported by the self-hosted inference engine."
+										value={<div>{log.prefill_tps.toFixed(1)} tok/s</div>}
+									/>
+								)}
+								{log.decode_tps != null && !isNaN(log.decode_tps) && (
+									<LogEntryDetailsView
+										className="w-full"
+										label="Decode Speed"
+										tooltip="Generation throughput reported by the self-hosted inference engine."
+										value={<div>{log.decode_tps.toFixed(1)} tok/s</div>}
+									/>
+								)}
+								{log.ttft_ms != null && !isNaN(log.ttft_ms) && (
+									<LogEntryDetailsView
+										className="w-full"
+										label="Time to First Token"
+										tooltip="Time from request submission to the first generated token, reported by the self-hosted inference engine."
+										value={<div>{log.ttft_ms.toFixed(2)}ms</div>}
+									/>
+								)}
 							</div>
 							{log.overhead_breakdown && log.overhead_breakdown.length > 0 ? (
 								<OverheadBreakdown buckets={log.overhead_breakdown} overheadMs={log.overhead_latency} />

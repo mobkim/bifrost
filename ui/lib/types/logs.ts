@@ -805,6 +805,9 @@ export interface LogEntry {
 	upstream_latency?: number; // provider socket time across all attempts, ms
 	overhead_latency?: number; // Bifrost overhead (total minus upstream), ms
 	overhead_breakdown?: OverheadBucket[]; // per-span self-time decomposition of overhead (microseconds)
+	prefill_tps?: number; // self-hosted-engine prompt-processing speed, tokens/sec (e.g. Gufo); absent for other providers
+	decode_tps?: number; // self-hosted-engine generation speed, tokens/sec (e.g. Gufo); absent for other providers
+	ttft_ms?: number; // self-hosted-engine time to first token, ms (e.g. Gufo); absent for other providers
 	token_usage?: LLMUsage;
 	cache_debug?: CacheMetadata;
 	batch_debug?: BatchDebug;

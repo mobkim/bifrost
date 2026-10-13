@@ -1977,6 +1977,14 @@ type BifrostLLMUsage struct {
 	// (CalculateCostForUsage) never sees RoutingInfo, so without it a fallback-served
 	// turn is priced at the requested model's rates.
 	ServerSideFallbackModel *string `json:"-"`
+	// PrefillTokensPerSecond/DecodeTokensPerSecond/TimeToFirstTokenMs carry
+	// self-hosted-engine inference metrics (currently: Gufo's OpenAI-compatible
+	// usage extension — usage.prompt_tokens_per_second, usage.completion_tokens_per_second,
+	// usage.gufo.ttft_ms) through to logging. Nil for every provider that doesn't report
+	// them; never billed on, purely observability.
+	PrefillTokensPerSecond *float64 `json:"prefill_tokens_per_second,omitempty"`
+	DecodeTokensPerSecond  *float64 `json:"decode_tokens_per_second,omitempty"`
+	TimeToFirstTokenMs     *float64 `json:"ttft_ms,omitempty"`
 }
 
 type ChatPromptTokensDetails struct {
@@ -2544,7 +2552,20 @@ func (u *BifrostLLMUsage) DeepCopy() *BifrostLLMUsage {
 		m := *u.ServerSideFallbackModel
 		c.ServerSideFallbackModel = &m
 	}
+	c.PrefillTokensPerSecond = copyFloat64Ptr(u.PrefillTokensPerSecond)
+	c.DecodeTokensPerSecond = copyFloat64Ptr(u.DecodeTokensPerSecond)
+	c.TimeToFirstTokenMs = copyFloat64Ptr(u.TimeToFirstTokenMs)
 	return &c
+}
+
+// copyFloat64Ptr returns an independent copy of a *float64 (nil-safe), for
+// deep-copying optional numeric metrics.
+func copyFloat64Ptr(p *float64) *float64 {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }
 
 // copyIntPtr returns an independent copy of an *int (nil-safe), for deep-copying

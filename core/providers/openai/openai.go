@@ -1217,7 +1217,50 @@ func HandleOpenAIChatCompletionRequest(
 		response.ExtraFields.RawResponse = rawResponse
 	}
 
+	applySelfHostedUsageExtensions(body, response.Usage)
+
 	return response, nil
+}
+
+// selfHostedUsageExtension is the shape of the extra usage fields some
+// self-hosted, OpenAI-compatible engines report that the OpenAI spec doesn't
+// define — currently Gufo (see https://github.com/kyuz0/amd-strix-halo-toolboxes),
+// which adds prompt/completion tokens-per-second to `usage` directly and nests a
+// `gufo` object on it carrying ttft_ms plus other engine-internal diagnostics.
+// Best-effort only: a response without these fields (any other provider, or an
+// older/newer Gufo build that renames them) just leaves the usage fields nil.
+type selfHostedUsageExtension struct {
+	Usage struct {
+		PromptTokensPerSecond     *float64 `json:"prompt_tokens_per_second"`
+		CompletionTokensPerSecond *float64 `json:"completion_tokens_per_second"`
+		Gufo                      *struct {
+			TTFTMs *float64 `json:"ttft_ms"`
+		} `json:"gufo"`
+	} `json:"usage"`
+}
+
+// applySelfHostedUsageExtensions re-scans the raw response body for the
+// self-hosted-engine usage fields above and copies any present onto usage.
+// Separate from the main typed decode (rather than added as fields on
+// BifrostLLMUsage's own json tags) so a real provider that ever ships a
+// same-named-but-differently-shaped field can't collide with it.
+func applySelfHostedUsageExtensions(body []byte, usage *schemas.BifrostLLMUsage) {
+	if usage == nil || len(body) == 0 {
+		return
+	}
+	var ext selfHostedUsageExtension
+	if err := sonic.Unmarshal(body, &ext); err != nil {
+		return
+	}
+	if ext.Usage.PromptTokensPerSecond != nil {
+		usage.PrefillTokensPerSecond = ext.Usage.PromptTokensPerSecond
+	}
+	if ext.Usage.CompletionTokensPerSecond != nil {
+		usage.DecodeTokensPerSecond = ext.Usage.CompletionTokensPerSecond
+	}
+	if ext.Usage.Gufo != nil && ext.Usage.Gufo.TTFTMs != nil {
+		usage.TimeToFirstTokenMs = ext.Usage.Gufo.TTFTMs
+	}
 }
 
 // ChatCompletionStream handles streaming for OpenAI chat completions.
@@ -1615,6 +1658,9 @@ func HandleOpenAIChatCompletionStreaming(
 				if umErr != nil {
 					logger.Warn("Failed to parse stream response: %v", umErr)
 					continue
+				}
+				if response.Usage != nil {
+					applySelfHostedUsageExtensions([]byte(jsonData), response.Usage)
 				}
 			}
 

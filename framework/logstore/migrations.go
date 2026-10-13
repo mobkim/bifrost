@@ -359,6 +359,7 @@ var logstoreMigrationSteps = []migrationStep{
 	{IDs: []string{"logs_add_live_session_column"}, run: migrationAddLiveSessionColumn},
 	{IDs: []string{"agent_logs_init"}, run: migrationCreateAgentLogsTable},
 	{IDs: []string{"agent_logs_add_raw_payload_columns"}, run: migrationAddAgentRawPayloadColumns},
+	{IDs: []string{"logs_add_self_hosted_inference_metrics_columns"}, run: migrationAddSelfHostedInferenceMetricsColumns},
 }
 
 // areThereAnyPendingMigrations returns true if there are any pending migrations to be applied.
@@ -733,6 +734,52 @@ func migrationAddUpstreamAndOverheadLatencyColumns(ctx context.Context, db *gorm
 	}})
 	if err := m.Migrate(); err != nil {
 		return fmt.Errorf("error while adding upstream/overhead latency columns: %s", err.Error())
+	}
+	return nil
+}
+
+// migrationAddSelfHostedInferenceMetricsColumns adds prefill_tps, decode_tps,
+// and ttft_ms to the logs table. These carry self-hosted-engine inference
+// metrics (currently Gufo's usage.prompt_tokens_per_second/completion_tokens_per_second
+// and usage.gufo.ttft_ms, see core/providers/openai/applySelfHostedUsageExtensions);
+// nil for every other provider.
+func migrationAddSelfHostedInferenceMetricsColumns(ctx context.Context, db *gorm.DB, logger schemas.Logger) error {
+	migrationName := "logs_add_self_hosted_inference_metrics_columns"
+	logger.Info("[logstore] starting migration %s", migrationName)
+	defer logger.Info("[logstore] finished migration %s", migrationName)
+	opts := *migrator.DefaultOptions
+	opts.UseTransaction = true
+	m := migrator.New(db, &opts, []*migrator.Migration{{
+		ID: migrationName,
+		Migrate: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if err := addColumnIfNotExists(tx, logger, &Log{}, "prefill_tps"); err != nil {
+				return err
+			}
+			if err := addColumnIfNotExists(tx, logger, &Log{}, "decode_tps"); err != nil {
+				return err
+			}
+			if err := addColumnIfNotExists(tx, logger, &Log{}, "ttft_ms"); err != nil {
+				return err
+			}
+			return nil
+		},
+		Rollback: func(tx *gorm.DB) error {
+			tx = tx.WithContext(ctx)
+			if err := dropColumnIfExists(tx, logger, &Log{}, "prefill_tps"); err != nil {
+				return err
+			}
+			if err := dropColumnIfExists(tx, logger, &Log{}, "decode_tps"); err != nil {
+				return err
+			}
+			if err := dropColumnIfExists(tx, logger, &Log{}, "ttft_ms"); err != nil {
+				return err
+			}
+			return nil
+		},
+	}})
+	if err := m.Migrate(); err != nil {
+		return fmt.Errorf("error while adding self-hosted inference metrics columns: %s", err.Error())
 	}
 	return nil
 }

@@ -416,6 +416,9 @@ func (p *LoggerPlugin) applyStreamingOutputToEntry(entry *logstore.Log, streamRe
 		entry.PromptTokens = usage.PromptTokens
 		entry.CompletionTokens = usage.CompletionTokens
 		entry.TotalTokens = usage.TotalTokens
+		entry.PrefillTps = usage.PrefillTokensPerSecond
+		entry.DecodeTps = usage.DecodeTokensPerSecond
+		entry.TtftMs = usage.TimeToFirstTokenMs
 	}
 	if streamResponse.Data.ServiceTier != nil {
 		entry.ServiceTier = new(string(*streamResponse.Data.ServiceTier))
@@ -584,6 +587,9 @@ func (p *LoggerPlugin) applyNonStreamingOutputToEntry(entry *logstore.Log, resul
 		entry.PromptTokens = usage.PromptTokens
 		entry.CompletionTokens = usage.CompletionTokens
 		entry.TotalTokens = usage.TotalTokens
+		entry.PrefillTps = usage.PrefillTokensPerSecond
+		entry.DecodeTps = usage.DecodeTokensPerSecond
+		entry.TtftMs = usage.TimeToFirstTokenMs
 	}
 	applyServedTierToEntry(entry, result, usage)
 
